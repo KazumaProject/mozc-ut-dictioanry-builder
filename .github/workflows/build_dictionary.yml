@@ -20,6 +20,8 @@ on:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    # Set a longer timeout as dictionary downloads can be slow
+    timeout-minutes: 60
 
     steps:
       # 1. Check out your repository code
@@ -32,51 +34,62 @@ jobs:
         with:
           python-version: '3.11'
 
-      # 3. Install Python dependencies
+      # 3. Install dependencies
       - name: Install dependencies
         run: |
+          echo "--- Installing Python dependencies ---"
           python -m pip install --upgrade pip
           pip install kanjiconv sudachipy sudachidict_core
-
-      # 4. Prepare Mozc and UT dictionary files
-      - name: Prepare Dictionary Files
-        run: |
-          echo "--- Installing build dependencies ---"
+          echo "--- Installing OS dependencies ---"
           sudo apt-get update
-          sudo apt-get install -y nkf xz-utils bzip2 mecab libmecab-dev mecab-ipadic-utf8 git make curl wget
+          sudo apt-get install -y nkf xz-utils bzip2 mecab libmecab-dev mecab-ipadic-utf8 git make curl wget build-essential
 
-          echo "--- Setting up directories ---"
-          mkdir mozc dic
+      # 4. Prepare Dictionary Files
+      - name: Build and Prepare Dictionaries
+        run: |
+          echo "--- Setting up output directory ---"
+          mkdir -p ./dic
 
-          echo "--- Cloning merge-ut-dictionaries to generate dic files ---"
-          git clone --depth 1 https://github.com/utuhiro78/merge-ut-dictionaries.git
-          
-          echo "--- Manually create work directory to prevent errors ---"
-          mkdir -p merge-ut-dictionaries/work
-          
-          echo "--- Configuring and building UT dictionaries ---"
-          cd merge-ut-dictionaries/src/merge
-          # Modify make.sh to enable neologd and disable sudachidict
-          sed -i 's/^#neologd="true"/neologd="true"/' make.sh
-          sed -i 's/^sudachidict="true"/#sudachidict="true"/' make.sh
-          # Run the build script using bash
+          # --- Build Wikipedia Dictionary ---
+          echo "--- Building Wikipedia Dictionary ---"
+          git clone --depth 1 https://github.com/utuhiro78/mozcdic-ut-jawiki.git
+          cd mozcdic-ut-jawiki
           bash make.sh
+          mv work/wikipedia.*.txt ../dic/wiki.txt
+          cd ..
+
+          # --- Build NEologd Dictionary ---
+          echo "--- Building NEologd Dictionary ---"
+          git clone --depth 1 https://github.com/utuhiro78/mozcdic-ut-neologd.git
+          cd mozcdic-ut-neologd
+          bash make.sh
+          mv work/NEologd.*-u.txt ../dic/neologd.txt
+          cd ..
           
-          echo "--- Listing generated files for debugging ---"
-          ls -lR ../../work
+          # --- Build Personal Names Dictionary ---
+          echo "--- Building Personal Names Dictionary ---"
+          git clone --depth 1 https://github.com/utuhiro78/mozcdic-ut-personal-names.git
+          cd mozcdic-ut-personal-names
+          bash make.sh
+          mv work/jp-names.*.txt ../dic/names.txt
+          cd ..
 
-          # Return to the root directory of the main repo
-          cd ../../..
+          # --- Build Place Names Dictionary ---
+          echo "--- Building Place Names Dictionary ---"
+          git clone --depth 1 https://github.com/utuhiro78/mozcdic-ut-place-names.git
+          cd mozcdic-ut-place-names
+          bash make.sh
+          mv work/jawiki-place.*.txt ../dic/place.txt
+          cd ..
 
-          echo "--- Moving generated dic files ---"
-          # Use wildcards to handle potential version changes in filenames
-          mv merge-ut-dictionaries/work/jawiki-place.*.txt ./dic/place.txt
-          mv merge-ut-dictionaries/work/jp-names.*.txt ./dic/names.txt
-          mv merge-ut-dictionaries/work/wikipedia.*.txt ./dic/wiki.txt
-          mv merge-ut-dictionaries/work/NEologd.*-u.txt ./dic/neologd.txt
-          echo "Dic files prepared."
+          echo "--- All dictionaries built. Final files: ---"
+          ls -lR ./dic
 
+      # 5. Prepare Mozc base dictionary
+      - name: Prepare Mozc Dictionary
+        run: |
           echo "--- Downloading Mozc dictionary files ---"
+          mkdir -p ./mozc
           MOZC_BASE_URL="https://raw.githubusercontent.com/google/mozc/master/src/data/dictionary_oss"
           for i in $(seq -f "%02g" 0 9); do
             wget -P ./mozc/ "${MOZC_BASE_URL}/dictionary${i}.txt"
@@ -84,11 +97,11 @@ jobs:
           wget -P ./mozc/ "${MOZC_BASE_URL}/suffix.txt"
           echo "Mozc files prepared."
 
-      # 5. Run the main Python script
+      # 6. Run the main Python script to filter dictionaries
       - name: Run dictionary processing script
         run: python ./process_dictionaries.py
 
-      # 6. Commit and push on schedule
+      # 7. Commit and push on schedule
       # This step runs ONLY for scheduled events to update the repo.
       - name: Commit files
         if: github.event_name == 'schedule'
@@ -100,7 +113,7 @@ jobs:
           commit_user_email: "github-actions[bot]@users.noreply.github.com"
           commit_author: "GitHub Actions Bot <github-actions[bot]@users.noreply.github.com>"
 
-      # 7. Package and release on tag push
+      # 8. Package and release on tag push
       # These steps run ONLY when a new tag is pushed.
       - name: Package release artifacts
         if: startsWith(github.ref, 'refs/tags/')
