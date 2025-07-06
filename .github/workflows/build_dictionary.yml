@@ -30,7 +30,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11' # Updated from 3.10 to 3.11
+          python-version: '3.11'
 
       # 3. Install Python dependencies
       - name: Install dependencies
@@ -41,6 +41,10 @@ jobs:
       # 4. Prepare Mozc and UT dictionary files
       - name: Prepare Dictionary Files
         run: |
+          echo "--- Installing build dependencies ---"
+          sudo apt-get update
+          sudo apt-get install -y nkf xz-utils bzip2 mecab libmecab-dev mecab-ipadic-utf8 git make curl wget
+
           echo "--- Setting up directories ---"
           mkdir mozc dic
 
@@ -54,6 +58,10 @@ jobs:
           sed -i 's/^sudachidict="true"/#sudachidict="true"/' make.sh
           # Run the build script
           sh make.sh
+          
+          echo "--- Listing generated files for debugging ---"
+          ls -lR ../../work
+
           # Return to the root directory of the main repo
           cd ../../..
 
