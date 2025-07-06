@@ -35,49 +35,68 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11' # Updated from 3.10 to 3.11
+          python-version: '3.11'
 
       # 3. Install Python dependencies defined in the script.
       - name: Install dependencies
         run: |
+          set -x # Print each command before executing it
           python -m pip install --upgrade pip
           pip install kanjiconv sudachipy sudachidict_core
 
       # 4. Prepare all source dictionary files needed by the Python script.
       - name: Prepare Dictionary Files
         run: |
+          set -x # Print each command for debugging
           echo "--- Setting up directories ---"
           mkdir mozc dic
+          
+          echo "--- Current directory contents ---"
+          ls -l
 
-          echo "--- Cloning merge-ut-dictionaries to generate source dic files ---"
+          echo "--- Cloning merge-ut-dictionaries ---"
           git clone https://github.com/utuhiro78/merge-ut-dictionaries.git
-          cd merge-ut-dictionaries
-          # The 'make' command downloads and processes all source dictionaries.
-          make
-          cd ..
+          
+          echo "--- Verifying cloned directory ---"
+          ls -l merge-ut-dictionaries
+          
+          echo "--- Running make in merge-ut-dictionaries directory ---"
+          make -C merge-ut-dictionaries
+          echo "--- Make command finished ---"
 
           echo "--- Moving generated dic files ---"
-          # Use wildcards to handle potential version/date changes in filenames.
           mv merge-ut-dictionaries/work/jawiki-place.*.txt ./dic/place.txt
           mv merge-ut-dictionaries/work/jp-names.*.txt ./dic/names.txt
           mv merge-ut-dictionaries/work/wikipedia.*.txt ./dic/wiki.txt
           mv merge-ut-dictionaries/work/NEologd.*-u.txt ./dic/neologd.txt
-          echo "Source dic files prepared."
-
+          
+          echo "--- Verifying contents of ./dic directory ---"
+          ls -lR dic
+          
           echo "--- Downloading Mozc dictionary files ---"
           MOZC_BASE_URL="https://raw.githubusercontent.com/google/mozc/master/src/data/dictionary_oss"
           for i in $(seq -f "%02g" 0 9); do
             wget -P ./mozc/ "${MOZC_BASE_URL}/dictionary${i}.txt"
           done
           wget -P ./mozc/ "${MOZC_BASE_URL}/suffix.txt"
-          echo "Mozc files prepared."
+
+          echo "--- Verifying contents of ./mozc directory ---"
+          ls -lR mozc
+          echo "--- Source dic files prepared. ---"
 
       # 5. Run the main Python script to process and filter all dictionaries.
       - name: Run dictionary processing script
-        run: python ./process_dictionaries.py
+        run: |
+          set -x # Print each command for debugging
+          echo "--- Listing files before running Python script ---"
+          ls -lR
+          echo "--- Running Python script ---"
+          python ./process_dictionaries.py
+          echo "--- Python script finished ---"
+          echo "--- Listing generated .txt files ---"
+          ls -l *.txt
 
       # 6. Commit and push updated files on scheduled runs.
-      # This step runs ONLY for scheduled events to keep the repo up-to-date.
       - name: Commit files
         if: github.event_name == 'schedule'
         uses: stefanzweifel/git-auto-commit-action@v5
@@ -89,13 +108,17 @@ jobs:
           commit_author: "GitHub Actions Bot <github-actions[bot]@users.noreply.github.com>"
 
       # 7. Package generated dictionary files into a zip archive for the release.
-      # This step runs ONLY when a new tag is pushed.
       - name: Package release artifacts
         if: startsWith(github.ref, 'refs/tags/')
-        run: zip dictionary-artifacts.zip *.txt
+        run: |
+          set -x # Print each command for debugging
+          echo "--- Listing files to be zipped ---"
+          ls -l *.txt
+          zip dictionary-artifacts.zip *.txt
+          echo "--- Verifying created zip file ---"
+          ls -l dictionary-artifacts.zip
 
       # 8. Create a new GitHub Release and upload the zip archive as an asset.
-      # This step also runs ONLY when a new tag is pushed.
       - name: Create Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
