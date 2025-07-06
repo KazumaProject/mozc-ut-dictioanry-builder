@@ -56,8 +56,8 @@ jobs:
           # Modify make.sh to enable neologd and disable sudachidict
           sed -i 's/^#neologd="true"/neologd="true"/' make.sh
           sed -i 's/^sudachidict="true"/#sudachidict="true"/' make.sh
-          # Run the build script
-          sh make.sh
+          # Run the build script using bash
+          bash make.sh
           
           echo "--- Listing generated files for debugging ---"
           ls -lR ../../work
