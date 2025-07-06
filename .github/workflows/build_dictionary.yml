@@ -53,34 +53,34 @@ jobs:
           # --- Build Wikipedia Dictionary ---
           echo "--- Building Wikipedia Dictionary ---"
           git clone --depth 1 https://github.com/utuhiro78/mozcdic-ut-jawiki.git
-          cd mozcdic-ut-jawiki/src
+          cd mozcdic-ut-jawiki
           bash make.sh
-          mv ../work/wikipedia.*.txt ../../dic/wiki.txt
-          cd ../..
+          mv work/wikipedia.*.txt ../dic/wiki.txt
+          cd ..
 
           # --- Build NEologd Dictionary ---
           echo "--- Building NEologd Dictionary ---"
           git clone --depth 1 https://github.com/utuhiro78/mozcdic-ut-neologd.git
-          cd mozcdic-ut-neologd/src
+          cd mozcdic-ut-neologd
           bash make.sh
-          mv ../work/NEologd.*-u.txt ../../dic/neologd.txt
-          cd ../..
+          mv work/NEologd.*-u.txt ../dic/neologd.txt
+          cd ..
           
           # --- Build Personal Names Dictionary ---
           echo "--- Building Personal Names Dictionary ---"
           git clone --depth 1 https://github.com/utuhiro78/mozcdic-ut-personal-names.git
-          cd mozcdic-ut-personal-names/src
+          cd mozcdic-ut-personal-names
           bash make.sh
-          mv ../work/jp-names.*.txt ../../dic/names.txt
-          cd ../..
+          mv work/jp-names.*.txt ../dic/names.txt
+          cd ..
 
           # --- Build Place Names Dictionary ---
           echo "--- Building Place Names Dictionary ---"
           git clone --depth 1 https://github.com/utuhiro78/mozcdic-ut-place-names.git
-          cd mozcdic-ut-place-names/src
+          cd mozcdic-ut-place-names
           bash make.sh
-          mv ../work/jawiki-place.*.txt ../../dic/place.txt
-          cd ../..
+          mv work/jawiki-place.*.txt ../dic/place.txt
+          cd ..
 
           echo "--- All dictionaries built. Final files: ---"
           ls -lR ./dic
