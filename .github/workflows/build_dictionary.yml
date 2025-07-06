@@ -30,7 +30,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11' # Updated from 3.10 to 3.11
+          python-version: '3.11'
 
       # 3. Install Python dependencies
       - name: Install dependencies
@@ -46,10 +46,11 @@ jobs:
 
           echo "--- Cloning merge-ut-dictionaries to generate dic files ---"
           git clone https://github.com/utuhiro78/merge-ut-dictionaries.git
-          cd merge-ut-dictionaries
-          # The 'make' command downloads and processes all source dictionaries
-          make
-          cd ..
+          
+          echo "--- Running make in the merge-ut-dictionaries directory ---"
+          # The -C flag tells make to change to the specified directory before running.
+          # This is more robust than using 'cd'.
+          make -C merge-ut-dictionaries
 
           echo "--- Moving generated dic files ---"
           # Use wildcards to handle potential version changes in filenames
@@ -69,6 +70,7 @@ jobs:
 
       # 5. Run the main Python script
       - name: Run dictionary processing script
+        id: process_script
         run: python ./process_dictionaries.py
 
       # 6. Commit and push on schedule
@@ -89,13 +91,6 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         run: zip dictionary-artifacts.zip *.txt
 
-      - name: Upload build artifact
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: actions/upload-artifact@v4
-        with:
-          name: dictionary-artifacts
-          path: dictionary-artifacts.zip
-
       - name: Create Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
@@ -105,4 +100,3 @@ jobs:
           body: |
             Automated release of updated dictionary files.
             The attached zip file contains all generated dictionaries.
-
