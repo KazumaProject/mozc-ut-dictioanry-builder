@@ -30,7 +30,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10' # You can change this version if needed
+          python-version: '3.11' # Updated from 3.10 to 3.11
 
       # 3. Install Python dependencies
       - name: Install dependencies
