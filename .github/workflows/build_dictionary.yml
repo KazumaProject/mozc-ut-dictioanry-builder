@@ -60,10 +60,11 @@ jobs:
           echo "--- Verifying cloned directory structure ---"
           ls -lR merge-ut-dictionaries
           
-          echo "--- Running make in merge-ut-dictionaries/src directory ---"
-          # Correctly target the 'src' subdirectory where the Makefile is located.
-          make -C merge-ut-dictionaries/src
-          echo "--- Make command finished ---"
+          echo "--- Running build script in merge-ut-dictionaries/src directory ---"
+          # This repository uses a shell script 'make.sh' instead of a standard Makefile.
+          # We change into the directory and execute the script.
+          (cd merge-ut-dictionaries/src && sh make.sh)
+          echo "--- Build script finished ---"
 
           echo "--- Moving generated dic files ---"
           mv merge-ut-dictionaries/work/jawiki-place.*.txt ./dic/place.txt
