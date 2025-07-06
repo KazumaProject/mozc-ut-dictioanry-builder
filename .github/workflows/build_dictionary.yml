@@ -51,6 +51,9 @@ jobs:
           echo "--- Cloning merge-ut-dictionaries to generate dic files ---"
           git clone --depth 1 https://github.com/utuhiro78/merge-ut-dictionaries.git
           
+          echo "--- Manually create work directory to prevent errors ---"
+          mkdir -p merge-ut-dictionaries/work
+          
           echo "--- Configuring and building UT dictionaries ---"
           cd merge-ut-dictionaries/src/merge
           # Modify make.sh to enable neologd and disable sudachidict
