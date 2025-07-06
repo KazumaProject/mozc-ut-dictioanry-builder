@@ -61,9 +61,9 @@ jobs:
           ls -lR merge-ut-dictionaries
           
           echo "--- Running build script in merge-ut-dictionaries/src directory ---"
-          # This repository uses a shell script 'make.sh' instead of a standard Makefile.
-          # We change into the directory and execute the script.
-          (cd merge-ut-dictionaries/src && sh make.sh)
+          # Add 'ls -l' inside the subshell to debug the "No such file" error.
+          # This will list the contents of the directory right before execution.
+          (cd merge-ut-dictionaries/src && echo "--- Contents of src directory: ---" && ls -l && sh make.sh)
           echo "--- Build script finished ---"
 
           echo "--- Moving generated dic files ---"
