@@ -57,11 +57,12 @@ jobs:
           echo "--- Cloning merge-ut-dictionaries ---"
           git clone https://github.com/utuhiro78/merge-ut-dictionaries.git
           
-          echo "--- Verifying cloned directory ---"
-          ls -l merge-ut-dictionaries
+          echo "--- Verifying cloned directory structure ---"
+          ls -lR merge-ut-dictionaries
           
-          echo "--- Running make in merge-ut-dictionaries directory ---"
-          make -C merge-ut-dictionaries
+          echo "--- Running make in merge-ut-dictionaries/src directory ---"
+          # Correctly target the 'src' subdirectory where the Makefile is located.
+          make -C merge-ut-dictionaries/src
           echo "--- Make command finished ---"
 
           echo "--- Moving generated dic files ---"
