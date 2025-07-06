@@ -1,0 +1,108 @@
+# .github/workflows/build_dictionary.yml
+
+name: Build and Update Dictionaries
+
+# Controls when the action will run.
+on:
+  # Allows manual runs from the Actions tab
+  workflow_dispatch:
+
+  # Runs on a schedule (twice a year)
+  schedule:
+    # Runs at 00:00 on January 1st and July 1st
+    - cron: '0 0 1 1,7 *'
+
+  # Runs when a tag is pushed (e.g. v1.0.0)
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Check out your repository code
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. Set up Python environment
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10' # You can change this version if needed
+
+      # 3. Install Python dependencies
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install kanjiconv sudachipy sudachidict_core
+
+      # 4. Prepare Mozc and UT dictionary files
+      - name: Prepare Dictionary Files
+        run: |
+          echo "--- Setting up directories ---"
+          mkdir mozc dic
+
+          echo "--- Cloning merge-ut-dictionaries to generate dic files ---"
+          git clone https://github.com/utuhiro78/merge-ut-dictionaries.git
+          cd merge-ut-dictionaries
+          # The 'make' command downloads and processes all source dictionaries
+          make
+          cd ..
+
+          echo "--- Moving generated dic files ---"
+          # Use wildcards to handle potential version changes in filenames
+          mv merge-ut-dictionaries/work/jawiki-place.*.txt ./dic/place.txt
+          mv merge-ut-dictionaries/work/jp-names.*.txt ./dic/names.txt
+          mv merge-ut-dictionaries/work/wikipedia.*.txt ./dic/wiki.txt
+          mv merge-ut-dictionaries/work/NEologd.*-u.txt ./dic/neologd.txt
+          echo "Dic files prepared."
+
+          echo "--- Downloading Mozc dictionary files ---"
+          MOZC_BASE_URL="https://raw.githubusercontent.com/google/mozc/master/src/data/dictionary_oss"
+          for i in $(seq -f "%02g" 0 9); do
+            wget -P ./mozc/ "${MOZC_BASE_URL}/dictionary${i}.txt"
+          done
+          wget -P ./mozc/ "${MOZC_BASE_URL}/suffix.txt"
+          echo "Mozc files prepared."
+
+      # 5. Run the main Python script
+      - name: Run dictionary processing script
+        run: python ./process_dictionaries.py
+
+      # 6. Commit and push on schedule
+      # This step runs ONLY for scheduled events to update the repo.
+      - name: Commit files
+        if: github.event_name == 'schedule'
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore(bot): Automatically update dictionary files"
+          file_pattern: "*.txt" # Commits all changed .txt files
+          commit_user_name: "GitHub Actions Bot"
+          commit_user_email: "github-actions[bot]@users.noreply.github.com"
+          commit_author: "GitHub Actions Bot <github-actions[bot]@users.noreply.github.com>"
+
+      # 7. Package and release on tag push
+      # These steps run ONLY when a new tag is pushed.
+      - name: Package release artifacts
+        if: startsWith(github.ref, 'refs/tags/')
+        run: zip dictionary-artifacts.zip *.txt
+
+      - name: Upload build artifact
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: actions/upload-artifact@v4
+        with:
+          name: dictionary-artifacts
+          path: dictionary-artifacts.zip
+
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dictionary-artifacts.zip
+          name: Dictionary Release ${{ github.ref_name }}
+          body: |
+            Automated release of updated dictionary files.
+            The attached zip file contains all generated dictionaries.
+

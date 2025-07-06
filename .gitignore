@@ -1,0 +1,8 @@
+# Python cache
+__pycache__/
+
+# Directories created by the GitHub Actions workflow
+# These are temporary build artifacts and should not be committed.
+mozc/
+dic/
+merge-ut-dictionaries/
