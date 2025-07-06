@@ -45,11 +45,17 @@ jobs:
           mkdir mozc dic
 
           echo "--- Cloning merge-ut-dictionaries to generate dic files ---"
-          git clone https://github.com/utuhiro78/merge-ut-dictionaries.git
-          cd merge-ut-dictionaries
-          # The 'make' command downloads and processes all source dictionaries
-          make
-          cd ..
+          git clone --depth 1 https://github.com/utuhiro78/merge-ut-dictionaries.git
+          
+          echo "--- Configuring and building UT dictionaries ---"
+          cd merge-ut-dictionaries/src/merge
+          # Modify make.sh to enable neologd and disable sudachidict
+          sed -i 's/^#neologd="true"/neologd="true"/' make.sh
+          sed -i 's/^sudachidict="true"/#sudachidict="true"/' make.sh
+          # Run the build script
+          sh make.sh
+          # Return to the root directory of the main repo
+          cd ../../..
 
           echo "--- Moving generated dic files ---"
           # Use wildcards to handle potential version changes in filenames
