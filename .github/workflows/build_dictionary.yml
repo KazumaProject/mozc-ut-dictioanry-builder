@@ -72,16 +72,15 @@ jobs:
           sh make.sh
 
           echo "--- Moving generated dictionaries ---"
-          # make.shは親ディレクトリ(src/)にファイルを生成するため、移動する
+          # make.shはカレントディレクトリ(src/merge/)にファイルを生成する
           # 生成されたファイルをリポジトリのdicディレクトリに正しい名前で配置する
-          cd ../ # (src/ ディレクトリへ移動)
-          mv mozcdic-ut-jawiki.txt        ../../dic/wiki.txt
-          mv mozcdic-ut-neologd.txt       ../../dic/neologd.txt
-          mv mozcdic-ut-personal-names.txt ../../dic/names.txt
-          mv mozcdic-ut-place-names.txt   ../../dic/place.txt
+          mv mozcdic-ut-jawiki.txt        ../../../../dic/wiki.txt
+          mv mozcdic-ut-neologd.txt       ../../../../dic/neologd.txt
+          mv mozcdic-ut-personal-names.txt ../../../../dic/names.txt
+          mv mozcdic-ut-place-names.txt   ../../../../dic/place.txt
           
           echo "--- Cleaning up temporary build directory ---"
-          cd ../../.. # (リポジトリのルートへ移動)
+          cd ../../../../ # (リポジトリのルートへ移動)
           rm -rf build_temp
 
           echo "--- Verifying final contents of ./dic directory ---"
