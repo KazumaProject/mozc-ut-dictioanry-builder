@@ -79,10 +79,10 @@ jobs:
           # --- Build personal-names (-> names.txt) ---
           echo "--- Building Personal Names dictionary ---"
           git clone --depth 1 https://github.com/utuhiro78/mozcdic-ut-personal-names.git
-          # The source repository now provides the uncompressed .txt file directly.
-          # Verify that the file exists before moving it.
-          ls -l mozcdic-ut-personal-names/jp-names.txt
-          mv mozcdic-ut-personal-names/jp-names.txt ../dic/names.txt
+          # CORRECTED: The actual filename in the repository is 'mozcdic-ut-jp-names.txt'.
+          # Verify that the correct file exists before moving it.
+          ls -l mozcdic-ut-personal-names/mozcdic-ut-jp-names.txt
+          mv mozcdic-ut-personal-names/mozcdic-ut-jp-names.txt ../dic/names.txt
 
           # --- Build place-names (-> place.txt) ---
           echo "--- Building Place Names dictionary ---"
