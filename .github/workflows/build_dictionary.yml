@@ -55,25 +55,34 @@ jobs:
           echo "--- Cloning merge-ut-dictionaries ---"
           git clone https://github.com/utuhiro78/merge-ut-dictionaries.git
           
-          echo "--- Modifying merge script to select specific dictionaries and build from source ---"
-          SCRIPT_PATH="merge-ut-dictionaries/src/merge/make.sh"
-          # sedコマンドを使い、make.shをインプレース編集（-i）する
-          # neologdを有効化（コメントを外す）
-          sed -i 's/#neologd="true"/neologd="true"/' "$SCRIPT_PATH"
-          # sudachidictを無効化（コメントアウトする）
-          sed -i 's/sudachidict="true"/#sudachidict="true"/' "$SCRIPT_PATH"
-          # ソースからビルドする設定を有効化（コメントを外す）
-          sed -i 's/#generate_latest="true"/generate_latest="true"/' "$SCRIPT_PATH"
-          # サブスクリプトの呼び出しを 'sh' から 'bash' に変更する
-          sed -i 's/sh make.sh/bash make.sh/g' "$SCRIPT_PATH"
+          echo "--- Modifying build scripts ---"
+          MERGE_SCRIPT_PATH="merge-ut-dictionaries/src/merge/make.sh"
+          JAWIKI_SCRIPT_PATH="merge-ut-dictionaries/src/jawiki/make.sh"
+
+          # --- Modify merge/make.sh ---
+          # neologdを有効化
+          sed -i 's/#neologd="true"/neologd="true"/' "$MERGE_SCRIPT_PATH"
+          # sudachidictを無効化
+          sed -i 's/sudachidict="true"/#sudachidict="true"/' "$MERGE_SCRIPT_PATH"
+          # ソースからビルドする設定を有効化
+          sed -i 's/#generate_latest="true"/generate_latest="true"/' "$MERGE_SCRIPT_PATH"
+          # サブスクリプトの呼び出しを 'sh' から 'bash' に変更
+          sed -i 's/sh make.sh/bash make.sh/g' "$MERGE_SCRIPT_PATH"
           
-          echo "--- Verifying modified make.sh ---"
-          cat "$SCRIPT_PATH"
+          # --- Modify jawiki/make.sh to download the correct index file ---
+          # 巨大なXMLファイルではなく、正しい索引ファイルをダウンロードするようにURLを修正
+          sed -i "s|'https://dumps.wikimedia.org/jawiki/latest/jawiki-latest-pages-articles-multistream.xml.bz2'|'https://dumps.wikimedia.org/jawiki/latest/jawiki-latest-pages-articles-multistream-index.txt.bz2'|" "$JAWIKI_SCRIPT_PATH"
+
+          echo "--- Verifying modified merge/make.sh ---"
+          cat "$MERGE_SCRIPT_PATH"
+          echo "--- Verifying modified jawiki/make.sh ---"
+          cat "$JAWIKI_SCRIPT_PATH"
           
-          echo "--- Running build script in merge-ut-dictionaries/src/merge directory ---"
-          # The script uses bash-specific syntax '[[', so it must be run with 'bash'.
-          (cd merge-ut-dictionaries/src/merge && bash make.sh)
-          echo "--- Build script finished ---"
+          echo "--- Running build script with enhanced error checking ---"
+          # Add 'set -e' to the subshell to ensure it exits immediately on any error.
+          (cd merge-ut-dictionaries/src/merge && set -e && bash make.sh)
+
+          echo "--- Build script finished successfully. ---"
 
           echo "--- [DEBUG] Listing contents of the work directory ---"
           ls -lR merge-ut-dictionaries/work || echo "work directory not found or is empty."
