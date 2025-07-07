@@ -64,6 +64,8 @@ jobs:
           sed -i 's/sudachidict="true"/#sudachidict="true"/' "$SCRIPT_PATH"
           # ソースからビルドする設定を有効化（コメントを外す）
           sed -i 's/#generate_latest="true"/generate_latest="true"/' "$SCRIPT_PATH"
+          # サブスクリプトの呼び出しを 'sh' から 'bash' に変更する
+          sed -i 's/sh make.sh/bash make.sh/g' "$SCRIPT_PATH"
           
           echo "--- Verifying modified make.sh ---"
           cat "$SCRIPT_PATH"
