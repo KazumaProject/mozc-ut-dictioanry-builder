@@ -44,57 +44,44 @@ jobs:
           python -m pip install --upgrade pip
           pip install kanjiconv sudachipy sudachidict_core jaconv
 
-      # 4. Generate source dictionary files directly.
+      # 4. Generate source dictionary files using the make.sh script.
       - name: Generate Source Dictionaries
         run: |
-          # Exit immediately if a command exits with a non-zero status.
+          # コマンドが失敗したら即座に終了する
           set -ex
-          
+
           echo "--- Setting up directories ---"
-          mkdir -p ./dic ./mozc ./build_temp
-          cd build_temp
-
+          mkdir -p ./dic ./build_temp
+          
           echo "--- Cloning dictionary generation scripts ---"
-          git clone https://github.com/utuhiro78/merge-ut-dictionaries.git
+          cd build_temp
+          git clone --depth 1 https://github.com/utuhiro78/merge-ut-dictionaries.git
+          cd merge-ut-dictionaries/src/merge/
+
+          echo "--- Configuring make.sh to enable desired dictionaries ---"
+          # sedコマンドを使い、make.sh内のビルド対象フラグを書き換えて有効化する
+          sed -i \
+            -e 's/^#jawiki="true"/jawiki="true"/' \
+            -e 's/^#neologd="true"/neologd="true"/' \
+            -e 's/^#personal_names="true"/personal_names="true"/' \
+            -e 's/^#place_names="true"/place_names="true"/' \
+            make.sh
+
+          echo "--- Running build script ---"
+          # 辞書生成スクリプトを実行する
+          sh make.sh
+
+          echo "--- Moving generated dictionaries ---"
+          # make.shは親ディレクトリ(src/)にファイルを生成するため、移動する
+          # 生成されたファイルをリポジトリのdicディレクトリに正しい名前で配置する
+          cd ../ # (src/ ディレクトリへ移動)
+          mv mozcdic-ut-jawiki.txt        ../../dic/wiki.txt
+          mv mozcdic-ut-neologd.txt       ../../dic/neologd.txt
+          mv mozcdic-ut-personal-names.txt ../../dic/names.txt
+          mv mozcdic-ut-place-names.txt   ../../dic/place.txt
           
-          # --- Build jawiki (-> wiki.txt) ---
-          echo "--- Building Wikipedia dictionary ---"
-          JAWIKI_INDEX_URL='https://dumps.wikimedia.org/jawiki/latest/jawiki-latest-pages-articles-multistream-index.txt.bz2'
-          wget -N "$JAWIKI_INDEX_URL"
-          python merge-ut-dictionaries/src/jawiki/convert_jawiki.py jawiki-latest-pages-articles-multistream-index.txt.bz2
-          # Verify that the output file was created before moving it.
-          ls -l mozcdic-ut-jawiki.txt
-          mv mozcdic-ut-jawiki.txt ../dic/wiki.txt
-
-          # --- Build neologd (-> neologd.txt) ---
-          echo "--- Building NEologd dictionary ---"
-          NEOLOGD_SEED_URL='https://github.com/neologd/mecab-ipadic-neologd/raw/master/seed/mecab-user-dict-seed.20200910.csv.xz'
-          wget -N "$NEOLOGD_SEED_URL"
-          xz -dfk mecab-user-dict-seed.20200910.csv.xz
-          python merge-ut-dictionaries/src/neologd/convert_neologd.py mecab-user-dict-seed.20200910.csv
-          # Verify that the output file was created before moving it.
-          ls -l mozcdic-ut-neologd.txt
-          mv mozcdic-ut-neologd.txt ../dic/neologd.txt
-
-          # --- Build personal-names (-> names.txt) ---
-          echo "--- Building Personal Names dictionary ---"
-          git clone --depth 1 https://github.com/utuhiro78/mozcdic-ut-personal-names.git
-          # CORRECTED: The actual filename in the repository is 'mozcdic-ut-jp-names.txt'.
-          # Verify that the correct file exists before moving it.
-          ls -l mozcdic-ut-personal-names.txt
-          mv mozcdic-ut-personal-names.txt ../dic/names.txt
-
-          # --- Build place-names (-> place.txt) ---
-          echo "--- Building Place Names dictionary ---"
-          # The place names script uses the same index file as the wiki script.
-          python merge-ut-dictionaries/src/place-names/generate_place_names.py jawiki-latest-pages-articles-multistream-index.txt.bz2
-          # Verify that the output file was created before moving it.
-          ls -l mozcdic-ut-place-names.txt
-          mv mozcdic-ut-place-names.txt ../dic/place.txt
-          
-          # --- Cleanup ---
           echo "--- Cleaning up temporary build directory ---"
-          cd ..
+          cd ../../.. # (リポジトリのルートへ移動)
           rm -rf build_temp
 
           echo "--- Verifying final contents of ./dic directory ---"
