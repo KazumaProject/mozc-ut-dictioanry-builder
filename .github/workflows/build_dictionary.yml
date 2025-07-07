@@ -62,8 +62,7 @@ jobs:
           JAWIKI_INDEX_URL='https://dumps.wikimedia.org/jawiki/latest/jawiki-latest-pages-articles-multistream-index.txt.bz2'
           wget -N "$JAWIKI_INDEX_URL"
           python merge-ut-dictionaries/src/jawiki/convert_jawiki.py jawiki-latest-pages-articles-multistream-index.txt.bz2
-          # Decompress the generated file
-          bzip2 -dfk mozcdic-ut-jawiki.txt.bz2
+          # Verify that the output file was created before moving it.
           ls -l mozcdic-ut-jawiki.txt
           mv mozcdic-ut-jawiki.txt ../dic/wiki.txt
 
@@ -73,27 +72,25 @@ jobs:
           wget -N "$NEOLOGD_SEED_URL"
           xz -dfk mecab-user-dict-seed.20200910.csv.xz
           python merge-ut-dictionaries/src/neologd/convert_neologd.py mecab-user-dict-seed.20200910.csv
-          # Decompress the generated file
-          bzip2 -dfk mozcdic-ut-neologd.txt.bz2
+          # Verify that the output file was created before moving it.
           ls -l mozcdic-ut-neologd.txt
           mv mozcdic-ut-neologd.txt ../dic/neologd.txt
 
           # --- Build personal-names (-> names.txt) ---
           echo "--- Building Personal Names dictionary ---"
           git clone --depth 1 https://github.com/utuhiro78/mozcdic-ut-personal-names.git
-          # Decompress the correct file from the repository
-          bzip2 -dfk mozcdic-ut-personal-names/mozcdic-ut-personal-names.txt.bz2
-          ls -l mozcdic-ut-personal-names/mozcdic-ut-personal-names.txt
-          mv mozcdic-ut-personal-names/mozcdic-ut-personal-names.txt ../dic/names.txt
+          # CORRECTED: The actual filename in the repository is 'mozcdic-ut-jp-names.txt'.
+          # Verify that the correct file exists before moving it.
+          ls -l mozcdic-ut-personal-names.txt
+          mv mozcdic-ut-personal-names.txt ../dic/names.txt
 
           # --- Build place-names (-> place.txt) ---
           echo "--- Building Place Names dictionary ---"
           # The place names script uses the same index file as the wiki script.
           python merge-ut-dictionaries/src/place-names/generate_place_names.py jawiki-latest-pages-articles-multistream-index.txt.bz2
-          # Decompress the generated file
-          bzip2 -dfk mozcdic-ut-jawiki-place-*.txt.bz2
-          ls -l mozcdic-ut-jawiki-place-*.txt
-          mv mozcdic-ut-jawiki-place-*.txt ../dic/place.txt
+          # Verify that the output file was created before moving it.
+          ls -l mozcdic-ut-place-names.txt
+          mv mozcdic-ut-place-names.txt ../dic/place.txt
           
           # --- Cleanup ---
           echo "--- Cleaning up temporary build directory ---"
