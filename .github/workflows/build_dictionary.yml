@@ -74,8 +74,9 @@ jobs:
           # --- Build personal-names (-> names.txt) ---
           echo "--- Building Personal Names dictionary ---"
           git clone --depth 1 https://github.com/utuhiro78/mozcdic-ut-personal-names.git
-          bzip2 -dfk mozcdic-ut-personal-names/mozcdic-ut-jp-names-*.txt.bz2
-          mv mozcdic-ut-personal-names/mozcdic-ut-jp-names-*.txt ../dic/names.txt
+          # The filename is static, so remove the wildcard '*'
+          bzip2 -dfk mozcdic-ut-personal-names/mozcdic-ut-jp-names.txt.bz2
+          mv mozcdic-ut-personal-names/mozcdic-ut-jp-names.txt ../dic/names.txt
 
           # --- Build place-names (-> place.txt) ---
           echo "--- Building Place Names dictionary ---"
