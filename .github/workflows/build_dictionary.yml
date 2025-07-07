@@ -44,45 +44,67 @@ jobs:
           python -m pip install --upgrade pip
           pip install kanjiconv sudachipy sudachidict_core jaconv
 
-      # 4. Generate source dictionary files using the make.sh script.
+      # 4. Generate source dictionary files step-by-step for clarity and debugging
       - name: Generate Source Dictionaries
         run: |
-          # コマンドが失敗したら即座に終了する
           set -ex
 
           echo "--- Setting up directories ---"
           mkdir -p ./dic ./build_temp
+          cd build_temp
           
           echo "--- Cloning dictionary generation scripts ---"
-          cd build_temp
           git clone --depth 1 https://github.com/utuhiro78/merge-ut-dictionaries.git
-          cd merge-ut-dictionaries/src/merge/
-
-          echo "--- Configuring make.sh to enable desired dictionaries ---"
-          # sedコマンドを使い、make.sh内のビルド対象フラグを書き換えて有効化する
-          sed -i \
-            -e 's/^#jawiki="true"/jawiki="true"/' \
-            -e 's/^#neologd="true"/neologd="true"/' \
-            -e 's/^#personal_names="true"/personal_names="true"/' \
-            -e 's/^#place_names="true"/place_names="true"/' \
-            make.sh
-
-          echo "--- Running build script ---"
-          # スクリプトを sh ではなく bash で実行する
-          bash make.sh
-
-          echo "--- Moving generated dictionaries ---"
-          # make.shはカレントディレクトリ(src/merge/)にファイルを生成する
-          # 生成されたファイルをリポジトリのdicディレクトリに正しい名前で配置する
-          mv mozcdic-ut-jawiki.txt        ../../../../dic/wiki.txt
-          mv mozcdic-ut-neologd.txt       ../../../../dic/neologd.txt
-          mv mozcdic-ut-personal-names.txt ../../../../dic/names.txt
-          mv mozcdic-ut-place-names.txt   ../../../../dic/place.txt
           
-          echo "--- Cleaning up temporary build directory ---"
-          cd ../../../../ # (リポジトリのルートへ移動)
-          rm -rf build_temp
+          # --- PHASE 1: Generate individual source files ---
+          
+          echo "--- 1a. Building Wikipedia dictionary (jawiki) ---"
+          wget -N 'https://dumps.wikimedia.org/jawiki/latest/jawiki-latest-pages-articles-multistream-index.txt.bz2'
+          python3 merge-ut-dictionaries/src/jawiki/convert_jawiki.py jawiki-latest-pages-articles-multistream-index.txt.bz2
+          # Verify that the output file was created
+          ls -l mozcdic-ut-jawiki.txt
 
+          echo "--- 1b. Building NEologd dictionary ---"
+          wget -N 'https://github.com/neologd/mecab-ipadic-neologd/raw/master/seed/mecab-user-dict-seed.20200910.csv.xz'
+          xz -dfk mecab-user-dict-seed.20200910.csv.xz
+          python3 merge-ut-dictionaries/src/neologd/convert_neologd.py mecab-user-dict-seed.20200910.csv
+          # Verify that the output file was created
+          ls -l mozcdic-ut-neologd.txt
+
+          echo "--- 1c. Building Personal Names dictionary ---"
+          git clone --depth 1 https://github.com/utuhiro78/mozcdic-ut-personal-names.git
+          # The source file is inside the cloned repo
+          mv mozcdic-ut-personal-names/mozcdic-ut-jp-names.txt ./mozcdic-ut-personal-names.txt
+          # Verify that the output file was created
+          ls -l mozcdic-ut-personal-names.txt
+          
+          echo "--- 1d. Building Place Names dictionary ---"
+          python3 merge-ut-dictionaries/src/place-names/generate_place_names.py jawiki-latest-pages-articles-multistream-index.txt.bz2
+          # Verify that the output file was created
+          ls -l mozcdic-ut-place-names.txt
+
+          # --- PHASE 2: Merge and apply scores ---
+          
+          echo "--- 2a. Merging all source files ---"
+          cat mozcdic-ut-*.txt > merged-dictionary-raw.txt
+          echo "Raw dictionary contains $(wc -l < merged-dictionary-raw.txt) words."
+
+          echo "--- 2b. Applying final scores using the Python script ---"
+          # NOTE: The script name in the repo is 'merge_ut_dic.py'
+          python3 merge-ut-dictionaries/src/merge/merge_ut_dic.py merged-dictionary-raw.txt
+          # The script overwrites the input file with the final, scored dictionary.
+          
+          echo "--- Verifying final scored dictionary ---"
+          # Check for non-zero scores
+          grep -v -E '\t0$' merged-dictionary-raw.txt | head
+          
+          echo "--- Moving final dictionary ---"
+          mv merged-dictionary-raw.txt ../dic/custom-dictionary.txt
+
+          # --- FINAL CLEANUP ---
+          cd ..
+          rm -rf build_temp
+          
           echo "--- Verifying final contents of ./dic directory ---"
           ls -lR dic
 
@@ -110,7 +132,7 @@ jobs:
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "chore(bot): Automatically update dictionary files"
-          file_pattern: "*.txt"
+          file_pattern: "dic/*.txt"
           commit_user_name: "GitHub Actions Bot"
           commit_user_email: "github-actions[bot]@users.noreply.github.com"
           commit_author: "GitHub Actions Bot <github-actions[bot]@users.noreply.github.com>"
@@ -120,7 +142,7 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         run: |
           set -x
-          zip dictionary-artifacts.zip *.txt
+          zip dictionary-artifacts.zip dic/*.txt
 
       # 9. Create a new GitHub Release and upload the zip archive as an asset.
       - name: Create Release
