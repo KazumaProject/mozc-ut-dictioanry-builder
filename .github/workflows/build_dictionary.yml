@@ -68,9 +68,8 @@ jobs:
           cat "$SCRIPT_PATH"
           
           echo "--- Running build script in merge-ut-dictionaries/src/merge directory ---"
-          # The main build script is located in the 'src/merge' subdirectory.
-          # Change to that directory and execute the make.sh script.
-          (cd merge-ut-dictionaries/src/merge && sh make.sh)
+          # The script uses bash-specific syntax '[[', so it must be run with 'bash'.
+          (cd merge-ut-dictionaries/src/merge && bash make.sh)
           echo "--- Build script finished ---"
 
           echo "--- Moving generated dic files ---"
