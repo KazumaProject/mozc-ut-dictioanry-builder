@@ -54,13 +54,15 @@ jobs:
           echo "--- Cloning merge-ut-dictionaries ---"
           git clone https://github.com/utuhiro78/merge-ut-dictionaries.git
           
-          echo "--- Modifying merge script to select specific dictionaries ---"
+          echo "--- Modifying merge script to select specific dictionaries and build from source ---"
           SCRIPT_PATH="merge-ut-dictionaries/src/merge/make.sh"
           # sedコマンドを使い、make.shをインプレース編集（-i）する
           # neologdを有効化（コメントを外す）
           sed -i 's/#neologd="true"/neologd="true"/' "$SCRIPT_PATH"
           # sudachidictを無効化（コメントアウトする）
           sed -i 's/sudachidict="true"/#sudachidict="true"/' "$SCRIPT_PATH"
+          # ソースからビルドする設定を有効化（コメントを外す）
+          sed -i 's/#generate_latest="true"/generate_latest="true"/' "$SCRIPT_PATH"
           
           echo "--- Verifying modified make.sh ---"
           cat "$SCRIPT_PATH"
@@ -75,6 +77,7 @@ jobs:
           # ビルド対象の辞書ファイルのみを移動する
           mv merge-ut-dictionaries/work/jawiki-*.txt ./dic/wiki.txt
           mv merge-ut-dictionaries/work/NEologd-*.txt ./dic/neologd.txt
+          # personal-names は jp-names-*.txt として出力される
           mv merge-ut-dictionaries/work/jp-names-*.txt ./dic/names.txt
           mv merge-ut-dictionaries/work/jawiki-place-*.txt ./dic/place.txt
 
