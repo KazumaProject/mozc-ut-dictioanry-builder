@@ -37,113 +37,95 @@ jobs:
         with:
           python-version: '3.11'
 
-      # 3. Install Python dependencies defined in the script.
+      # 3. Install all required Python dependencies.
       - name: Install dependencies
         run: |
-          set -x # Print each command before executing it
+          set -x
           python -m pip install --upgrade pip
-          # Add missing 'jaconv' dependency
           pip install kanjiconv sudachipy sudachidict_core jaconv
 
-      # 4. Prepare all source dictionary files needed by the Python script.
-      - name: Prepare Dictionary Files
+      # 4. Generate source dictionary files directly.
+      - name: Generate Source Dictionaries
         run: |
-          set -x # Print each command for debugging
-          echo "--- Setting up directories ---"
-          mkdir mozc dic
+          set -ex
           
-          echo "--- Cloning merge-ut-dictionaries ---"
+          echo "--- Setting up directories ---"
+          mkdir -p ./dic ./mozc ./build_temp
+          cd build_temp
+
+          echo "--- Cloning dictionary generation scripts ---"
           git clone https://github.com/utuhiro78/merge-ut-dictionaries.git
           
-          echo "--- Modifying build scripts ---"
-          MERGE_SCRIPT_PATH="merge-ut-dictionaries/src/merge/make.sh"
-          JAWIKI_SCRIPT_PATH="merge-ut-dictionaries/src/jawiki/make.sh"
+          # --- Build jawiki (-> wiki.txt) ---
+          echo "--- Building Wikipedia dictionary ---"
+          JAWIKI_INDEX_URL='https://dumps.wikimedia.org/jawiki/latest/jawiki-latest-pages-articles-multistream-index.txt.bz2'
+          wget -N "$JAWIKI_INDEX_URL"
+          python merge-ut-dictionaries/src/jawiki/convert_jawiki.py jawiki-latest-pages-articles-multistream-index.txt.bz2
+          mv mozcdic-ut-jawiki.txt ../dic/wiki.txt
 
-          # --- Modify merge/make.sh ---
-          # neologdを有効化
-          sed -i 's/#neologd="true"/neologd="true"/' "$MERGE_SCRIPT_PATH"
-          # sudachidictを無効化
-          sed -i 's/sudachidict="true"/#sudachidict="true"/' "$MERGE_SCRIPT_PATH"
-          # ソースからビルドする設定を有効化
-          sed -i 's/#generate_latest="true"/generate_latest="true"/' "$MERGE_SCRIPT_PATH"
-          # サブスクリプトの呼び出しを 'sh' から 'bash' に変更
-          sed -i 's/sh make.sh/bash make.sh/g' "$MERGE_SCRIPT_PATH"
+          # --- Build neologd (-> neologd.txt) ---
+          echo "--- Building NEologd dictionary ---"
+          NEOLOGD_SEED_URL='https://github.com/neologd/mecab-ipadic-neologd/raw/master/seed/mecab-user-dict-seed.20200910.csv.xz'
+          wget -N "$NEOLOGD_SEED_URL"
+          xz -dfk mecab-user-dict-seed.20200910.csv.xz
+          python merge-ut-dictionaries/src/neologd/convert_neologd.py mecab-user-dict-seed.20200910.csv
+          mv mozcdic-ut-neologd.txt ../dic/neologd.txt
+
+          # --- Build personal-names (-> names.txt) ---
+          echo "--- Building Personal Names dictionary ---"
+          git clone --depth 1 https://github.com/utuhiro78/mozcdic-ut-personal-names.git
+          bzip2 -dfk mozcdic-ut-personal-names/mozcdic-ut-jp-names-*.txt.bz2
+          mv mozcdic-ut-personal-names/mozcdic-ut-jp-names-*.txt ../dic/names.txt
+
+          # --- Build place-names (-> place.txt) ---
+          echo "--- Building Place Names dictionary ---"
+          # The place names script uses the same index file as the wiki script, which we already downloaded.
+          python merge-ut-dictionaries/src/place-names/generate_place_names.py jawiki-latest-pages-articles-multistream-index.txt.bz2
+          mv mozcdic-ut-jawiki-place-*.txt ../dic/place.txt
           
-          # --- Modify jawiki/make.sh to download the correct index file ---
-          # 巨大なXMLファイルではなく、正しい索引ファイルをダウンロードするようにURLを修正
-          sed -i "s|'https://dumps.wikimedia.org/jawiki/latest/jawiki-latest-pages-articles-multistream.xml.bz2'|'https://dumps.wikimedia.org/jawiki/latest/jawiki-latest-pages-articles-multistream-index.txt.bz2'|" "$JAWIKI_SCRIPT_PATH"
-
-          echo "--- Verifying modified merge/make.sh ---"
-          cat "$MERGE_SCRIPT_PATH"
-          echo "--- Verifying modified jawiki/make.sh ---"
-          cat "$JAWIKI_SCRIPT_PATH"
-          
-          echo "--- Running build script with enhanced error checking ---"
-          # Add 'set -e' to the subshell to ensure it exits immediately on any error.
-          (cd merge-ut-dictionaries/src/merge && set -e && bash make.sh)
-
-          echo "--- Build script finished successfully. ---"
-
-          echo "--- [DEBUG] Listing contents of the work directory ---"
-          ls -lR merge-ut-dictionaries/work || echo "work directory not found or is empty."
-
-          echo "--- Moving generated dic files ---"
-          # ビルド対象の辞書ファイルのみを移動する
-          mv merge-ut-dictionaries/work/jawiki-*.txt ./dic/wiki.txt
-          mv merge-ut-dictionaries/work/NEologd-*.txt ./dic/neologd.txt
-          # personal-names は jp-names-*.txt として出力される
-          mv merge-ut-dictionaries/work/jp-names-*.txt ./dic/names.txt
-          mv merge-ut-dictionaries/work/jawiki-place-*.txt ./dic/place.txt
+          cd ..
+          rm -rf build_temp
 
           echo "--- Verifying contents of ./dic directory ---"
           ls -lR dic
-          
-          echo "--- Downloading Mozc dictionary files ---"
+
+      # 5. Download Mozc base dictionaries
+      - name: Download Mozc Dictionaries
+        run: |
+          set -x
           MOZC_BASE_URL="https://raw.githubusercontent.com/google/mozc/master/src/data/dictionary_oss"
           for i in $(seq -f "%02g" 0 9); do
             wget -P ./mozc/ "${MOZC_BASE_URL}/dictionary${i}.txt"
           done
           wget -P ./mozc/ "${MOZC_BASE_URL}/suffix.txt"
-
           echo "--- Verifying contents of ./mozc directory ---"
           ls -lR mozc
-          echo "--- Source dic files prepared. ---"
 
-      # 5. Run the main Python script to process and filter all dictionaries.
-      - name: Run dictionary processing script
+      # 6. Run the main Python script to process and filter all dictionaries.
+      - name: Run Dictionary Processing Script
         run: |
-          set -x # Print each command for debugging
-          echo "--- Listing files before running Python script ---"
-          ls -lR
-          echo "--- Running Python script ---"
+          set -x
           python ./process_dictionaries.py
-          echo "--- Python script finished ---"
-          echo "--- Listing generated .txt files ---"
-          ls -l *.txt
 
-      # 6. Commit and push updated files on scheduled runs.
+      # 7. Commit and push updated files on scheduled runs.
       - name: Commit files
         if: github.event_name == 'schedule'
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "chore(bot): Automatically update dictionary files"
-          file_pattern: "*.txt" # Commits all changed .txt files in the root.
+          file_pattern: "*.txt"
           commit_user_name: "GitHub Actions Bot"
           commit_user_email: "github-actions[bot]@users.noreply.github.com"
           commit_author: "GitHub Actions Bot <github-actions[bot]@users.noreply.github.com>"
 
-      # 7. Package generated dictionary files into a zip archive for the release.
+      # 8. Package generated dictionary files into a zip archive for the release.
       - name: Package release artifacts
         if: startsWith(github.ref, 'refs/tags/')
         run: |
-          set -x # Print each command for debugging
-          echo "--- Listing files to be zipped ---"
-          ls -l *.txt
+          set -x
           zip dictionary-artifacts.zip *.txt
-          echo "--- Verifying created zip file ---"
-          ls -l dictionary-artifacts.zip
 
-      # 8. Create a new GitHub Release and upload the zip archive as an asset.
+      # 9. Create a new GitHub Release and upload the zip archive as an asset.
       - name: Create Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
