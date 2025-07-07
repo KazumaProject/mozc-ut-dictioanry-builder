@@ -68,8 +68,8 @@ jobs:
             make.sh
 
           echo "--- Running build script ---"
-          # 辞書生成スクリプトを実行する
-          sh make.sh
+          # スクリプトを sh ではなく bash で実行する
+          bash make.sh
 
           echo "--- Moving generated dictionaries ---"
           # make.shはカレントディレクトリ(src/merge/)にファイルを生成する
