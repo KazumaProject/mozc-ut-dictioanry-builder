@@ -51,27 +51,33 @@ jobs:
           echo "--- Setting up directories ---"
           mkdir mozc dic
           
-          echo "--- Current directory contents ---"
-          ls -l
-
           echo "--- Cloning merge-ut-dictionaries ---"
           git clone https://github.com/utuhiro78/merge-ut-dictionaries.git
           
-          echo "--- Verifying cloned directory structure ---"
-          ls -lR merge-ut-dictionaries
+          echo "--- Modifying merge script to select specific dictionaries ---"
+          SCRIPT_PATH="merge-ut-dictionaries/src/merge/make.sh"
+          # sedコマンドを使い、make.shをインプレース編集（-i）する
+          # neologdを有効化（コメントを外す）
+          sed -i 's/#neologd="true"/neologd="true"/' "$SCRIPT_PATH"
+          # sudachidictを無効化（コメントアウトする）
+          sed -i 's/sudachidict="true"/#sudachidict="true"/' "$SCRIPT_PATH"
           
-          echo "--- Running build script in merge-ut-dictionaries/src directory ---"
-          # Add 'ls -l' inside the subshell to debug the "No such file" error.
-          # This will list the contents of the directory right before execution.
-          (cd merge-ut-dictionaries/src && echo "--- Contents of src directory: ---" && ls -l && sh make.sh)
+          echo "--- Verifying modified make.sh ---"
+          cat "$SCRIPT_PATH"
+          
+          echo "--- Running build script in merge-ut-dictionaries/src/merge directory ---"
+          # The main build script is located in the 'src/merge' subdirectory.
+          # Change to that directory and execute the make.sh script.
+          (cd merge-ut-dictionaries/src/merge && sh make.sh)
           echo "--- Build script finished ---"
 
           echo "--- Moving generated dic files ---"
-          mv merge-ut-dictionaries/work/jawiki-place.*.txt ./dic/place.txt
-          mv merge-ut-dictionaries/work/jp-names.*.txt ./dic/names.txt
-          mv merge-ut-dictionaries/work/wikipedia.*.txt ./dic/wiki.txt
-          mv merge-ut-dictionaries/work/NEologd.*-u.txt ./dic/neologd.txt
-          
+          # ビルド対象の辞書ファイルのみを移動する
+          mv merge-ut-dictionaries/work/jawiki-*.txt ./dic/wiki.txt
+          mv merge-ut-dictionaries/work/NEologd-*.txt ./dic/neologd.txt
+          mv merge-ut-dictionaries/work/jp-names-*.txt ./dic/names.txt
+          mv merge-ut-dictionaries/work/jawiki-place-*.txt ./dic/place.txt
+
           echo "--- Verifying contents of ./dic directory ---"
           ls -lR dic
           
