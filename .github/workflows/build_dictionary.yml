@@ -42,7 +42,8 @@ jobs:
         run: |
           set -x # Print each command before executing it
           python -m pip install --upgrade pip
-          pip install kanjiconv sudachipy sudachidict_core
+          # Add missing 'jaconv' dependency
+          pip install kanjiconv sudachipy sudachidict_core jaconv
 
       # 4. Prepare all source dictionary files needed by the Python script.
       - name: Prepare Dictionary Files
@@ -71,6 +72,9 @@ jobs:
           # The script uses bash-specific syntax '[[', so it must be run with 'bash'.
           (cd merge-ut-dictionaries/src/merge && bash make.sh)
           echo "--- Build script finished ---"
+
+          echo "--- [DEBUG] Listing contents of the work directory ---"
+          ls -lR merge-ut-dictionaries/work || echo "work directory not found or is empty."
 
           echo "--- Moving generated dic files ---"
           # ビルド対象の辞書ファイルのみを移動する
