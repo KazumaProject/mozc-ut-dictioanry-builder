@@ -62,6 +62,7 @@ jobs:
             -e 's/^#neologd="true"/neologd="true"/' \
             -e 's/^#personal_names="true"/personal_names="true"/' \
             -e 's/^#place_names="true"/place_names="true"/' \
+            -e 's/^#generate_latest="true"/generate_latest="true"/' \
             make.sh
           echo "--- Running build script ---"
           # スクリプトを sh ではなく bash で実行する
