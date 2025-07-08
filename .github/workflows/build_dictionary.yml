@@ -64,6 +64,12 @@ jobs:
             -e 's/^#place_names="true"/place_names="true"/' \
             -e 's/^#generate_latest="true"/generate_latest="true"/' \
             make.sh
+          
+          echo "--- Forcing sub-scripts to run with bash ---"
+          # Replace all instances of "sh make.sh" with "bash make.sh" inside the script
+          # to ensure bash-specific syntax is correctly interpreted.
+          sed -i 's/sh make.sh/bash make.sh/g' make.sh
+
           echo "--- Running build script ---"
           # スクリプトを sh ではなく bash で実行する
           bash make.sh
