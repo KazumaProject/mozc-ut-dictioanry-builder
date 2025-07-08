@@ -1,144 +1,56 @@
-# This workflow builds, tests, and releases the dictionary files.
-# It can be triggered manually, on a schedule, or when a new tag is pushed.
+# .github/workflows/build-ut.yml
+name: Build single-source UT dictionaries
 
-name: Build and Update Dictionaries
-
-# Controls when the action will run.
 on:
-  # Allows manual runs from the Actions tab on GitHub.
-  workflow_dispatch:
-
-  # Runs on a schedule (at 00:00 on Jan 1st and Jul 1st).
-  schedule:
-    - cron: '0 0 1 1,7 *'
-
-  # Runs when a tag matching the v*.*.* pattern is pushed.
-  push:
-    tags:
-      - 'v*.*.*'
+  workflow_dispatch:      # 手動実行
+  push:                   # または main への push
+    branches: [ main ]
 
 jobs:
-  build-and-deploy:
+  build:
     runs-on: ubuntu-latest
-    
-    # Define permissions for the job.
-    # 'contents: write' is required for committing files and creating releases.
-    permissions:
-      contents: write
+
+    strategy:
+      matrix:
+        src: [jawiki, personal_names, place_names, neologd, sudachidict]
 
     steps:
-      # 1. Check out your repository code so the workflow can access it.
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      # 2. Set up the specific version of Python required by the script.
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      # 依存 Python が必要な場合は有効に
+      - uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
-      # 3. Install all required Python dependencies.
-      - name: Install dependencies
+      - name: Clone merge-ut-dictionaries
         run: |
-          set -x
-          python -m pip install --upgrade pip
-          pip install kanjiconv sudachipy sudachidict_core jaconv
-          
-      # 4. Generate source dictionary files using the make.sh script.
-      - name: Generate Source Dictionaries
-        run: |
-          # コマンドが失敗したら即座に終了する
-          set -ex
-          echo "--- Setting up directories ---"
-          mkdir -p ./dic ./build_temp
-          
-          echo "--- Cloning dictionary generation scripts ---"
-          cd build_temp
           git clone --depth 1 https://github.com/utuhiro78/merge-ut-dictionaries.git
-          cd merge-ut-dictionaries/src/merge/
-          echo "--- Configuring make.sh to enable desired dictionaries ---"
-          # sedコマンドを使い、make.sh内のビルド対象フラグを書き換えて有効化する
-          sed -i \
-            -e 's/^#jawiki="true"/jawiki="true"/' \
-            -e 's/^#neologd="true"/neologd="true"/' \
-            -e 's/^#personal_names="true"/personal_names="true"/' \
-            -e 's/^#place_names="true"/place_names="true"/' \
-            -e 's/^#generate_latest="true"/generate_latest="true"/' \
-            make.sh
-          
-          echo "--- Forcing sub-scripts to run with bash ---"
-          # Replace all instances of "sh make.sh" with "bash make.sh" inside the script
-          # to ensure bash-specific syntax is correctly interpreted.
-          sed -i 's/sh make.sh/bash make.sh/g' make.sh
 
-          echo "--- Running build script ---"
-          # スクリプトを sh ではなく bash で実行する
-          bash make.sh
-          
-          echo "--- Listing generated files BEFORE move ---"
-          ls -l .
-
-          echo "--- Moving generated dictionaries ---"
-          # make.shはカレントディレクトリ(src/merge/)にファイルを生成する
-          # 生成されたファイルをリポジトリのdicディレクトリに正しい名前で配置する
-          mv mozcdic-ut-jawiki.txt        ../../../../dic/wiki.txt
-          mv mozcdic-ut-neologd.txt       ../../../../dic/neologd.txt
-          if [ -f mozcdic-ut-personal-names.txt ]; then
-            mv mozcdic-ut-personal-names.txt ../../../../dic/names.txt
-          else
-            echo "Warning: mozcdic-ut-personal-names.txt not found, skipping move."
-          fi
-          mv mozcdic-ut-place-names.txt   ../../../../dic/place.txt
-          
-          echo "--- Cleaning up temporary build directory ---"
-          cd ../../../../ # (リポジトリのルートへ移動)
-          rm -rf build_temp
-          echo "--- Verifying final contents of ./dic directory ---"
-          ls -lR dic
-
-      # 5. Download Mozc base dictionaries
-      - name: Download Mozc Dictionaries
+      - name: Build ${{ matrix.src }} only
+        working-directory: merge-ut-dictionaries/src/merge
         run: |
-          set -x
-          MOZC_BASE_URL="https://raw.githubusercontent.com/google/mozc/master/src/data/dictionary_oss"
-          for i in $(seq -f "%02g" 0 9); do
-            wget -P ./mozc/ "${MOZC_BASE_URL}/dictionary${i}.txt"
-          done
-          wget -P ./mozc/ "${MOZC_BASE_URL}/suffix.txt"
-          echo "--- Verifying contents of ./mozc directory ---"
-          ls -lR mozc
+          # ------ ① すべて false で初期化 ------
+          export alt_cannadic="false"
+          export edict2="false"
+          export jawiki="false"
+          export neologd="false"
+          export personal_names="false"
+          export place_names="false"
+          export skk_jisyo="false"
+          export sudachidict="false"
 
-      # 6. Run the main Python script to process and filter all dictionaries.
-      - name: Run Dictionary Processing Script
-        run: |
-          set -x
-          python ./process_dictionaries.py
+          # ------ ② 今回だけ true に ------
+          export ${{ matrix.src }}="true"
 
-      # 7. Commit and push updated files on scheduled runs.
-      - name: Commit files
-        if: github.event_name == 'schedule'
-        uses: stefanzweifel/git-auto-commit-action@v5
+          # ------ ③ make.sh 実行 ------
+          sh make.sh
+
+          # make.sh の最終成果物は mozcdic-ut.txt として
+          # カレントに置かれるので、わかりやすい名前へ
+          mv mozcdic-ut.txt ../../mozcdic-ut-${{ matrix.src }}.txt
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
         with:
-          commit_message: "chore(bot): Automatically update dictionary files"
-          file_pattern: "*.txt"
-          commit_user_name: "GitHub Actions Bot"
-          commit_user_email: "github-actions[bot]@users.noreply.github.com"
-          commit_author: "GitHub Actions Bot <github-actions[bot]@users.noreply.github.com>"
-
-      # 8. Package generated dictionary files into a zip archive for the release.
-      - name: Package release artifacts
-        if: startsWith(github.ref, 'refs/tags/')
-        run: |
-          set -x
-          zip dictionary-artifacts.zip *.txt
-
-      # 9. Create a new GitHub Release and upload the zip archive as an asset.
-      - name: Create Release
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: dictionary-artifacts.zip
-          name: Dictionary Release ${{ github.ref_name }}
-          body: |
-            Automated release of updated dictionary files.
-            The attached zip file contains all generated dictionaries.
+          name: mozcdic-ut-${{ matrix.src }}
+          path: merge-ut-dictionaries/mozcdic-ut-${{ matrix.src }}.txt
