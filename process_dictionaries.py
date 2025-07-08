@@ -155,19 +155,28 @@ def filter_file(input_file, output_file, not_same_output_file, clean_last=False,
         print(f"Potentially incorrect readings saved to {not_same_output_file}")
 
 # --- Main Execution ---
+# Filter each source file, checking for its existence first.
+if os.path.exists(place_file):
+    filter_file(place_file, place_output_file, place_output_file_not_same, clean_last=True)
+else:
+    print(f"Warning: Source file not found, skipping: {place_file}")
 
-# Filter each source file with its specific rules
-filter_file(place_file, place_output_file, place_output_file_not_same, clean_last=True)
-filter_file(names_file, names_output_file, names_output_file_not_same)
-filter_file(wiki_file, wiki_output_file, wiki_output_file_not_same, remove_exclamation=True, extra_filter=True, require_filter=True, skip_long_entries=True)
-filter_file(neologd_file, neologd_output_file, neologd_output_file_not_same, remove_exclamation=True, extra_filter=True, require_filter=True, skip_long_entries=True)
+if os.path.exists(names_file):
+    filter_file(names_file, names_output_file, names_output_file_not_same)
+else:
+    print(f"Warning: Source file not found, skipping: {names_file}")
+
+if os.path.exists(wiki_file):
+    filter_file(wiki_file, wiki_output_file, wiki_output_file_not_same, remove_exclamation=True, extra_filter=True, require_filter=True, skip_long_entries=True)
+else:
+    print(f"Warning: Source file not found, skipping: {wiki_file}")
+
+if os.path.exists(neologd_file):
+    filter_file(neologd_file, neologd_output_file, neologd_output_file_not_same, remove_exclamation=True, extra_filter=True, require_filter=True, skip_long_entries=True)
+else:
+    print(f"Warning: Source file not found, skipping: {neologd_file}")
 
 # --- Compare Filtered Wiki and NEologd Dictionaries ---
-
-# Define file paths for comparison
-wiki_filtered_file = "filtered_wiki.txt"
-neologd_filtered_file = "filtered_neologd.txt"
-
 common_output = "wiki_neologd_common.txt"
 only_wiki_output = "only_wiki.txt"
 only_neologd_output = "only_neologd.txt"
@@ -190,22 +199,27 @@ def write_data(file_path, data_dict, keys):
         for key in sorted(keys):
             f.write(f"{data_dict[key]}\n")
 
-print("Comparing filtered wiki and neologd files...")
-# Load the filtered data
-wiki_data = load_data(wiki_filtered_file)
-neologd_data = load_data(neologd_filtered_file)
+# Only run comparison if both filtered files were created
+if os.path.exists(wiki_output_file) and os.path.exists(neologd_output_file):
+    print("Comparing filtered wiki and neologd files...")
+    # Load the filtered data
+    wiki_data = load_data(wiki_output_file)
+    neologd_data = load_data(neologd_output_file)
 
-# Find common and unique entries based on (word, reading) tuples
-common_keys = set(wiki_data.keys()) & set(neologd_data.keys())
-only_wiki_keys = set(wiki_data.keys()) - set(neologd_data.keys())
-only_neologd_keys = set(neologd_data.keys()) - set(wiki_data.keys())
+    # Find common and unique entries based on (word, reading) tuples
+    common_keys = set(wiki_data.keys()) & set(neologd_data.keys())
+    only_wiki_keys = set(wiki_data.keys()) - set(neologd_data.keys())
+    only_neologd_keys = set(neologd_data.keys()) - set(wiki_data.keys())
 
-# Write the comparison results to files
-write_data(common_output, wiki_data, common_keys)
-write_data(only_wiki_output, wiki_data, only_wiki_keys)
-write_data(only_neologd_output, neologd_data, only_neologd_keys)
+    # Write the comparison results to files
+    write_data(common_output, wiki_data, common_keys)
+    write_data(only_wiki_output, wiki_data, only_wiki_keys)
+    write_data(only_neologd_output, neologd_data, only_neologd_keys)
 
-print(f"Common entries saved to {common_output}")
-print(f"Unique wiki entries saved to {only_wiki_output}")
-print(f"Unique neologd entries saved to {only_neologd_output}")
+    print(f"Common entries saved to {common_output}")
+    print(f"Unique wiki entries saved to {only_wiki_output}")
+    print(f"Unique neologd entries saved to {only_neologd_output}")
+else:
+    print("Skipping comparison because one or both filtered dictionary files (wiki, neologd) were not created.")
+
 print("Script finished.")

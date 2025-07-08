@@ -43,6 +43,7 @@ jobs:
           set -x
           python -m pip install --upgrade pip
           pip install kanjiconv sudachipy sudachidict_core jaconv
+          
       # 4. Generate source dictionary files using the make.sh script.
       - name: Generate Source Dictionaries
         run: |
@@ -73,6 +74,10 @@ jobs:
           echo "--- Running build script ---"
           # スクリプトを sh ではなく bash で実行する
           bash make.sh
+          
+          echo "--- Listing generated files BEFORE move ---"
+          ls -l .
+
           echo "--- Moving generated dictionaries ---"
           # make.shはカレントディレクトリ(src/merge/)にファイルを生成する
           # 生成されたファイルをリポジトリのdicディレクトリに正しい名前で配置する
@@ -90,6 +95,7 @@ jobs:
           rm -rf build_temp
           echo "--- Verifying final contents of ./dic directory ---"
           ls -lR dic
+
       # 5. Download Mozc base dictionaries
       - name: Download Mozc Dictionaries
         run: |
@@ -101,11 +107,13 @@ jobs:
           wget -P ./mozc/ "${MOZC_BASE_URL}/suffix.txt"
           echo "--- Verifying contents of ./mozc directory ---"
           ls -lR mozc
+
       # 6. Run the main Python script to process and filter all dictionaries.
       - name: Run Dictionary Processing Script
         run: |
           set -x
           python ./process_dictionaries.py
+
       # 7. Commit and push updated files on scheduled runs.
       - name: Commit files
         if: github.event_name == 'schedule'
@@ -123,6 +131,7 @@ jobs:
         run: |
           set -x
           zip dictionary-artifacts.zip *.txt
+
       # 9. Create a new GitHub Release and upload the zip archive as an asset.
       - name: Create Release
         if: startsWith(github.ref, 'refs/tags/')
