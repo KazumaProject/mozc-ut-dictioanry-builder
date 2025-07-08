@@ -72,7 +72,11 @@ jobs:
           # 生成されたファイルをリポジトリのdicディレクトリに正しい名前で配置する
           mv mozcdic-ut-jawiki.txt        ../../../../dic/wiki.txt
           mv mozcdic-ut-neologd.txt       ../../../../dic/neologd.txt
-          mv mozcdic-ut-personal-names.txt ../../../../dic/names.txt
+          if [ -f mozcdic-ut-personal-names.txt ]; then
+            mv mozcdic-ut-personal-names.txt ../../../../dic/names.txt
+          else
+            echo "Warning: mozcdic-ut-personal-names.txt not found, skipping move."
+          fi
           mv mozcdic-ut-place-names.txt   ../../../../dic/place.txt
           
           echo "--- Cleaning up temporary build directory ---"
