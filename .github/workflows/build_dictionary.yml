@@ -13,25 +13,26 @@ env:
   OUTPUT_DIR: ${{ github.workspace }}/artifacts   # 生成物を集める場所
 
 jobs:
+# ───────────────────────────────────────── build ─────────────────────────────────────────
   build:
     runs-on: ubuntu-latest
 
     steps:
-    # ───────────── 0. リポジトリ取得 ─────────────
+    # 0) 自リポジトリ取得
     - uses: actions/checkout@v4
 
-    # ───────────── 1. 必要パッケージ ─────────────
+    # 1) 必要パッケージ
     - name: Install prerequisites
       run: |
         sudo apt-get update
         sudo apt-get install -y git bzip2 python3 python3-pip curl
-        pip install --upgrade pip        # 新しめの pip を確保
+        pip install --upgrade pip
 
-    # ───────────── 2. UT 統合辞書ツール取得 ─────────────
+    # 2) UT 統合辞書ツール取得
     - name: Clone merge-ut-dictionaries
       run: git clone --depth 1 https://github.com/utuhiro78/merge-ut-dictionaries.git
 
-    # ───────────── 3. 個別辞書 (jawiki / neologd / personal_names / place_names) をビルド ─────────────
+    # 3) 個別辞書をビルド（jawiki / neologd / personal_names / place_names）
     - name: Build individual dictionaries
       working-directory: merge-ut-dictionaries/src/merge
       env:
@@ -50,30 +51,30 @@ jobs:
           mv mozcdic-ut.txt "${OUTPUT_DIR}/mozcdic-ut-${dict}.txt"
         done
 
-    # ───────────── 4. Mozc 標準辞書 (dictionary0?.txt / suffix.txt) を取得 ─────────────
+    # 4) Mozc 標準辞書取得
     - name: Download Mozc original dictionaries
       run: |
         set -eux
         mkdir -p mozc
         base_url="https://raw.githubusercontent.com/google/mozc/master/src/data/dictionary_oss"
-        for i in $(seq -w 0 9); do                      # dictionary00.txt ~ dictionary09.txt
+        for i in $(seq -w 0 9); do
           curl -sSfL "${base_url}/dictionary0${i}.txt" -o "mozc/dictionary0${i}.txt" || true
         done
         curl -sSfL "${base_url}/suffix.txt" -o "mozc/suffix.txt"
 
-    # ───────────── 5. process_dictionaries.py 用入力を配置 ─────────────
+    # 5) process_dictionaries.py 用入力を配置
     - name: Prepare inputs for processing script
       env:
         OUTPUT_DIR: ${{ env.OUTPUT_DIR }}
       run: |
         set -eux
         mkdir -p dic
-        cp "${OUTPUT_DIR}/mozcdic-ut-place_names.txt"   dic/place.txt
+        cp "${OUTPUT_DIR}/mozcdic-ut-place_names.txt"    dic/place.txt
         cp "${OUTPUT_DIR}/mozcdic-ut-personal_names.txt" dic/names.txt
-        cp "${OUTPUT_DIR}/mozcdic-ut-jawiki.txt"        dic/wiki.txt
-        cp "${OUTPUT_DIR}/mozcdic-ut-neologd.txt"       dic/neologd.txt
+        cp "${OUTPUT_DIR}/mozcdic-ut-jawiki.txt"         dic/wiki.txt
+        cp "${OUTPUT_DIR}/mozcdic-ut-neologd.txt"        dic/neologd.txt
 
-    # ───────────── 6. KanjiConv + Sudachi をインストールして処理 ─────────────
+    # 6) KanjiConv + Sudachi をインストールして処理
     - name: Run process_dictionaries.py
       run: |
         pip install kanjiconv sudachipy sudachidict_full
@@ -81,25 +82,30 @@ jobs:
         mkdir -p "${OUTPUT_DIR}"
         mv filtered_*.txt wiki_neologd_common.txt only_wiki.txt only_neologd.txt "${OUTPUT_DIR}/"
 
-    # ───────────── 7. .txt をアーティファクト化 ─────────────
-    - name: Upload artefacts
+    # 7) .txt をアーティファクト化
+    - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: mozcdic-ut-txts
-        path: ${{ env.OUTPUT_DIR }}/*.txt
+        name: mozcdic-txts            # ← わかりやすい名前
+        path: ${{ env.OUTPUT_DIR }}   # ← ディレクトリ単位でアップロード
 
-  # ───────────────────────────────────────────────
+# ───────────────────────────────────────── release ─────────────────────────────────────────
   release:
     needs: build
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     steps:
+    # アーティファクトを同じディレクトリ構成で展開
     - uses: actions/download-artifact@v4
       with:
-        name: mozcdic-ut-txts
-        path: .          # 作業ディレクトリ直下に展開
+        name: mozcdic-txts            # ← build ジョブと同じ名前
+        path: artifacts               # ここにすべての .txt が入る
 
+    # 確認用（オプション）
+    - name: List downloaded files
+      run: ls -R artifacts
+
+    # Release へ .txt を添付
     - uses: softprops/action-gh-release@v2
       with:
-        files: |
-          *.txt          # 展開されたすべての .txt をリリースアセットに添付
+        files: artifacts/*.txt        # ← ここをディレクトリ付きに

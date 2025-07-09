@@ -1,230 +1,208 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-process_dictionaries.py
-────────────────────────────────────────────────────────────────────
-• Mozc 未収録なら「表記＝読み」のエントリも許可  
-• skip_identical パラメータで排他条件を制御  
-• SudachiPy（full 辞書）で品詞ごとに読みを取得し精度向上  
-────────────────────────────────────────────────────────────────────
-要件:
-    pip install kanjiconv sudachipy sudachidict_full
+Filter Mozc-style dictionaries and compare results.
+「見出し語＝読み」の新語（例: ちいかわ）を除外しないよう修正済み。
 """
 
-import glob
 import os
+import glob
 import re
-from typing import Dict, List, Set, Tuple
+import string
+from kanjiconv import SudachiDictType, KanjiConv
 
-from kanjiconv import KanjiConv, SudachiDictType
-from sudachipy import dictionary
+# ───────── 設定 ──────────
+mozc_dir = "./mozc"
+place_file   = "./dic/place.txt"
+names_file   = "./dic/names.txt"
+wiki_file    = "./dic/wiki.txt"
+neologd_file = "./dic/neologd.txt"
 
-# ────────────────────────────────
-# 0. パス定義
-# ────────────────────────────────
-MOZC_DIR = "./mozc"
-DIC_DIR = "./dic"
+place_output_file   = "./filtered_place.txt"
+names_output_file   = "./filtered_names.txt"
+wiki_output_file    = "./filtered_wiki.txt"
+neologd_output_file = "./filtered_neologd.txt"
 
-place_file = f"{DIC_DIR}/place.txt"
-names_file = f"{DIC_DIR}/names.txt"
-wiki_file = f"{DIC_DIR}/wiki.txt"
-neologd_file = f"{DIC_DIR}/neologd.txt"
+place_output_file_not_same   = "./filtered_place_not_same.txt"
+names_output_file_not_same   = "./filtered_names_not_same.txt"
+wiki_output_file_not_same    = "./filtered_wiki_not_same.txt"
+neologd_output_file_not_same = "./filtered_neologd_not_same.txt"
 
-place_out = "./filtered_place.txt"
-names_out = "./filtered_names.txt"
-wiki_out = "./filtered_wiki.txt"
-neologd_out = "./filtered_neologd.txt"
+suffix_file = os.path.join(mozc_dir, "suffix.txt")
 
-place_ng = "./filtered_place_not_same.txt"
-names_ng = "./filtered_names_not_same.txt"
-wiki_ng = "./filtered_wiki_not_same.txt"
-neologd_ng = "./filtered_neologd_not_same.txt"
+# ───────── 既存 Mozc 辞書の語を収集 ──────────
+dictionary_files = sorted(glob.glob(os.path.join(mozc_dir, "dictionary0[0-9].txt")))
+first_strings_set, last_strings_set = set(), set()
 
-suffix_file = f"{MOZC_DIR}/suffix.txt"
+kanji_conv = KanjiConv(sudachi_dict_type=SudachiDictType.FULL.value, separator="")
 
-# ────────────────────────────────
-# 1. Mozc 標準辞書読み込み
-# ────────────────────────────────
-first_strings_set: Set[str] = set()
-last_strings_set: Set[str] = set()
+def clean_last_string(text: str) -> str:
+    """Remove parentheses only (内容は残す)."""
+    return text.replace("(", "").replace(")", "")
 
-print("Loading Mozc core dictionaries ...")
-for p in sorted(glob.glob(f"{MOZC_DIR}/dictionary0[0-9].txt")):
-    with open(p, encoding="utf-8") as f:
+print("Processing Mozc dictionary files...")
+for file in dictionary_files:
+    with open(file, encoding="utf-8") as f:
         for line in f:
-            parts = line.rstrip("\n").split("\t")
+            parts = line.strip().split("\t")
             if len(parts) >= 2:
                 first_strings_set.add(parts[0])
                 last_strings_set.add(parts[-1])
 
-suffix_set: Set[str] = (
-    {ln.strip() for ln in open(suffix_file, encoding="utf-8")}
-    if os.path.exists(suffix_file)
-    else set()
-)
-print(f"suffix.txt: {len(suffix_set)} 行\n")
+# ───────── suffix.txt ──────────
+suffix_set = set()
+if os.path.exists(suffix_file):
+    with open(suffix_file, encoding="utf-8") as f:
+        suffix_set.update({line.strip() for line in f if line.strip()})
+print(f"Loaded {len(suffix_set)} suffixes.")
 
-# ────────────────────────────────
-# 2. ユーティリティ
-# ────────────────────────────────
-kanji_conv = KanjiConv(sudachi_dict_type=SudachiDictType.FULL.value, separator="")
-# SudachiPy (full dictionary)
-sudachi_tokenizer = dictionary.Dictionary(dict_type="full").create()
+# ───────── ユーティリティ ──────────
+def to_hiragana(text: str) -> str:
+    return kanji_conv.to_hiragana(text)
 
-KATA2HIRA = str.maketrans(
-    "アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン"
-    "ァィゥェォッャュョー",
-    "あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをん"
-    "ぁぃぅぇぉっゃゅょー",
-)
+def extract_kana(text: str) -> set[str]:
+    return set(re.findall(r'[ぁ-んァ-ヶー]', text))
 
 def katakana_to_hiragana(text: str) -> str:
-    """カタカナ→ひらがな + 中点除去"""
-    return text.translate(KATA2HIRA).replace("・", "")
+    text = text.replace("・", "")
+    return text.translate(str.maketrans(
+        "アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲンァィゥェォッャュョー",
+        "あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをんぁぃぅぇぉっゃゅょー"
+    ))
 
-def reading_with_sudachi(text: str) -> str:
-    """SudachiPy で品詞ごとに読みを取り、ひらがな化して結合"""
-    return "".join(
-        katakana_to_hiragana(tok.reading_form() if tok.reading_form() not in ("", "*") else tok.surface())
-        for tok in sudachi_tokenizer.tokenize(text)
-    )
-
-kana_re = re.compile(r"[ぁ-んァ-ヶー]")
-symbol_re = re.compile(r"[^\wぁ-んァ-ン一-龥]")
-
-# ────────────────────────────────
-# 3. フィルタ関数
-# ────────────────────────────────
+# ───────── メイン処理 ──────────
 def filter_file(
-    src: str,
-    dst: str,
-    ng_dst: str,
+    input_file: str,
+    output_file: str,
+    not_same_output_file: str,
     *,
     clean_last: bool = False,
     remove_exclamation: bool = False,
     extra_filter: bool = False,
     require_filter: bool = False,
-    skip_long: bool = False,
-    skip_identical: bool = True,
+    skip_long_entries: bool = False,
 ) -> None:
-    if not os.path.exists(src):
-        print(f"[SKIP] {src} not found")
-        return
+    """フィルタリング本体"""
+    filtered_lines, not_same_lines = [], []
 
-    kept: List[str] = []
-    flagged: List[str] = []
-
-    for line in open(src, encoding="utf-8"):
-        parts = line.rstrip("\n").split("\t")
-        if len(parts) < 5:
-            continue
-
-        word = parts[0]
-        reading_raw = parts[-1].replace("(", "").replace(")", "") if clean_last else parts[-1]
-
-        if skip_long and len(word) > 16:
-            continue
-        if symbol_re.search(reading_raw) and not symbol_re.search(word):
-            continue
-        if word.startswith("ん"):
-            continue
-        if remove_exclamation:
-            reading_raw = reading_raw.replace("!", "")
-        if extra_filter and any(ch in reading_raw for ch in "・！？"):
-            continue
-
-        word_clean = word.replace("・", "")
-        reading_hira = katakana_to_hiragana(reading_raw)
-        word_reading = reading_with_sudachi(word_clean)
-
-        # Mozc に既にある identical はスキップ
-        if skip_identical and word_reading == word_clean in first_strings_set:
-            continue
-        # require_filter で identical は除外
-        if require_filter and word_reading == reading_hira:
-            continue
-
-        # かな集合差で不一致チェック
-        if require_filter:
-            if set(kana_re.findall(reading_hira)) - set(kana_re.findall(word_reading)):
-                flagged.append(line.rstrip("\n"))
-                continue
-            if reading_raw in last_strings_set:
+    print(f"Processing {input_file}...")
+    with open(input_file, encoding="utf-8") as f:
+        for line in f:
+            parts = line.strip().split("\t")
+            if len(parts) < 5:
                 continue
 
-        kept.append(line.rstrip("\n"))
+            first_str = parts[0]
+            last_str  = clean_last_string(parts[-1]) if clean_last else parts[-1]
 
-    if kept:
-        with open(dst, "w", encoding="utf-8") as f:
-            f.write("\n".join(kept) + "\n")
-    if flagged:
-        with open(ng_dst, "w", encoding="utf-8") as f:
-            f.write("\n".join(flagged) + "\n")
+            if skip_long_entries and len(first_str) > 16:
+                continue
 
-    print(f"{os.path.basename(src):<15} → {len(kept):>6} kept / {len(flagged):>6} flagged")
+            if re.search(r'[^\wぁ-んァ-ン一-龥]', last_str) and not re.search(r'[^\wぁ-んァ-ン一-龥]', first_str):
+                continue
+            if first_str.startswith("ん"):
+                continue
 
-# ────────────────────────────────
-# 4. wiki と neologd の比較
-# ────────────────────────────────
-def load_dict(path: str) -> Dict[Tuple[str, str], str]:
-    d: Dict[Tuple[str, str], str] = {}
+            if remove_exclamation:
+                last_str = last_str.replace("!", "")
+
+            first_str_cleaned = first_str.replace("・", "").strip()
+            last_str_hira     = katakana_to_hiragana(last_str).strip()
+
+            if extra_filter and any(c in last_str for c in "・！？"):
+                continue
+
+            kana_set_first = extract_kana(to_hiragana(first_str_cleaned))
+            kana_set_last  = extract_kana(last_str_hira)
+
+            if require_filter:
+                # ───── 修正ポイント ─────
+                if first_str_cleaned == last_str_hira:
+                    # Mozc に既に同じ見出しがあれば重複として除外
+                    if first_str in first_strings_set:
+                        continue
+                # ──────────────────────
+
+                if kana_set_last - kana_set_first:
+                    print(f"Possibly incorrect reading: {first_str} -> {last_str}")
+                    not_same_lines.append(line.strip())
+                    continue
+
+                if last_str in last_strings_set:
+                    continue  # 読みが Mozc 既存ならスキップ
+
+            filtered_lines.append(line.strip())
+
+    with open(output_file, "w", encoding="utf-8") as f:
+        f.write("\n".join(filtered_lines) + "\n")
+
+    if not_same_lines:
+        with open(not_same_output_file, "w", encoding="utf-8") as f:
+            f.write("\n".join(not_same_lines) + "\n")
+
+    print(f"Filtered output saved to {output_file}")
+    if not_same_lines:
+        print(f"Potentially incorrect readings saved to {not_same_output_file}")
+
+# ───────── 個別フィルタ実行 ──────────
+if os.path.exists(place_file):
+    filter_file(place_file, place_output_file, place_output_file_not_same, clean_last=True)
+else:
+    print(f"Warning: Source file not found, skipping: {place_file}")
+
+if os.path.exists(names_file):
+    filter_file(names_file, names_output_file, names_output_file_not_same)
+else:
+    print(f"Warning: Source file not found, skipping: {names_file}")
+
+if os.path.exists(wiki_file):
+    filter_file(
+        wiki_file, wiki_output_file, wiki_output_file_not_same,
+        remove_exclamation=True, extra_filter=True,
+        require_filter=True, skip_long_entries=True
+    )
+else:
+    print(f"Warning: Source file not found, skipping: {wiki_file}")
+
+if os.path.exists(neologd_file):
+    filter_file(
+        neologd_file, neologd_output_file, neologd_output_file_not_same,
+        remove_exclamation=True, extra_filter=True,
+        require_filter=True, skip_long_entries=True
+    )
+else:
+    print(f"Warning: Source file not found, skipping: {neologd_file}")
+
+# ───────── Wiki vs NEologd 比較 ──────────
+def load_data(path: str) -> dict[tuple[str, str], str]:
+    data = {}
     with open(path, encoding="utf-8") as f:
-        for ln in f:
-            ps = ln.rstrip("\n").split("\t")
-            if len(ps) >= 2:
-                d[(ps[0], ps[-1])] = ln.rstrip("\n")
-    return d
+        for l in f:
+            p = l.rstrip("\n").split("\t")
+            if len(p) >= 2:
+                data[(p[0], p[-1])] = l.rstrip("\n")
+    return data
 
-def write_subset(path: str, data: Dict[Tuple[str, str], str], keys: Set[Tuple[str, str]]):
+def write_data(path: str, data: dict, keys: set[tuple[str, str]]) -> None:
     with open(path, "w", encoding="utf-8") as f:
         for k in sorted(keys):
             f.write(f"{data[k]}\n")
 
-def compare_dicts(wiki_p: str, neo_p: str):
-    if not (os.path.exists(wiki_p) and os.path.exists(neo_p)):
-        return
-    wiki_d = load_dict(wiki_p)
-    neo_d = load_dict(neo_p)
-    common = wiki_d.keys() & neo_d.keys()
-    only_wiki = wiki_d.keys() - neo_d.keys()
-    only_neo = neo_d.keys() - wiki_d.keys()
-    write_subset("wiki_neologd_common.txt", wiki_d, common)
-    write_subset("only_wiki.txt", wiki_d, only_wiki)
-    write_subset("only_neologd.txt", neo_d, only_neo)
-    print(f"common: {len(common)}, wiki only: {len(only_wiki)}, neologd only: {len(only_neo)}")
+if all(os.path.exists(p) for p in (wiki_output_file, neologd_output_file)):
+    print("Comparing filtered wiki and neologd files...")
+    wiki_data     = load_data(wiki_output_file)
+    neologd_data  = load_data(neologd_output_file)
 
-# ────────────────────────────────
-# 5. メイン
-# ────────────────────────────────
-def main():
-    # place / names
-    filter_file(place_file, place_out, place_ng, clean_last=True)
-    filter_file(names_file, names_out, names_ng)
+    common_keys       = set(wiki_data) & set(neologd_data)
+    only_wiki_keys    = set(wiki_data) - set(neologd_data)
+    only_neologd_keys = set(neologd_data) - set(wiki_data)
 
-    # wiki / neologd — identical も収集
-    filter_file(
-        wiki_file,
-        wiki_out,
-        wiki_ng,
-        remove_exclamation=True,
-        extra_filter=True,
-        require_filter=True,
-        skip_long=True,
-        skip_identical=False,
-    )
-    filter_file(
-        neologd_file,
-        neologd_out,
-        neologd_ng,
-        remove_exclamation=True,
-        extra_filter=True,
-        require_filter=True,
-        skip_long=True,
-        skip_identical=False,
-    )
+    write_data("wiki_neologd_common.txt", wiki_data, common_keys)
+    write_data("only_wiki.txt",          wiki_data, only_wiki_keys)
+    write_data("only_neologd.txt",       neologd_data, only_neologd_keys)
 
-    compare_dicts(wiki_out, neologd_out)
-    print("All done.")
+    print("Comparison files generated.")
+else:
+    print("Skipping comparison (wiki / neologd output missing).")
 
-if __name__ == "__main__":
-    main()
+print("Script finished.")
