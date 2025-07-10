@@ -34,6 +34,15 @@ neologd_output_file_not_same  = "./filtered_neologd_not_same.txt"
 
 suffix_file = os.path.join(mozc_dir, "suffix.txt")
 
+# ───────── 個別の除外リスト ──────────
+# ファイルごとに除外したい単語を (見出し語, 読み) のタプルで指定
+specific_exclusions = {
+    neologd_file: [
+        ("明倫養賢堂", "ようけんどう"),
+    ]
+}
+
+
 # ───────── 既存 Mozc 辞書の語を収集 ──────────
 dictionary_files = sorted(glob.glob(os.path.join(mozc_dir, "dictionary0[0-9].txt")))
 first_strings_set, last_strings_set = set(), set()
@@ -118,6 +127,19 @@ def filter_file(
 
             first_str = parts[0]
             last_str  = clean_last_string(parts[-1]) if clean_last else parts[-1]
+
+            # ★★★ 新しい除外ルール ★★★
+            # 個別の除外リストに一致するかチェック
+            is_specifically_excluded = False
+            if input_file in specific_exclusions:
+                for excluded_entry, excluded_reading in specific_exclusions[input_file]:
+                    if first_str == excluded_entry and last_str == excluded_reading:
+                        print(f"[Line {i+1} EXCLUDED] Specific exclusion rule: {first_str} -> {last_str}")
+                        is_specifically_excluded = True
+                        break
+            if is_specifically_excluded:
+                continue
+            # ★★★★★★★★★★★★★★★★★
 
             # ルール2: 長すぎる見出し語
             if skip_long_entries and len(first_str) > 16:
